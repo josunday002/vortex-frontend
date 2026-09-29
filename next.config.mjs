@@ -66,6 +66,13 @@ const WS_ORIGIN = (() => {
  *
  * 5. `img-src 'self' data:`
  *    Next.js Image optimization and inline SVG data URIs both need `data:`.
+ *
+ * 6. `worker-src 'self'`
+ *    The PWA service worker (public/sw.js) is served from the app origin and
+ *    must be explicitly allowed to register.  Without this directive the
+ *    browser falls back to script-src, which is fine today but would break if
+ *    script-src is ever tightened to a nonce-based policy.  Declaring it
+ *    explicitly keeps SW registration working under a stricter CSP.
  */
 function buildCsp() {
   const connectSrc = [
@@ -82,6 +89,8 @@ function buildCsp() {
     `connect-src ${connectSrc}`,
     "img-src 'self' data:",
     "font-src 'self'",
+    "worker-src 'self'",                 // PWA service worker registration (see note 6)
+    "manifest-src 'self'",               // PWA web app manifest
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -137,6 +146,17 @@ const nextConfig = {
         // Apply security headers to all routes.
         source: "/(.*)",
         headers: securityHeaders,
+      },
+      {
+        // The service worker must never be served from a stale HTTP cache,
+        // otherwise clients can get stuck on an old SW and miss updates.
+        // `no-cache` forces revalidation on every request while still
+        // allowing the browser to store the response.
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
       },
     ];
   },
